@@ -100,23 +100,24 @@ def get_image_size(file_path):
 
 
 def batch_generate_masks():
-    """批量生成带旋转矩形框的掩膜图"""
+    """批量生成带旋转矩形框的原图像"""
     # 创建输出目录
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # 批量处理每个标注数据
-    for data in tqdm(ANNOTATION_DATA, desc="生成掩膜图进度"):
+    for data in tqdm(ANNOTATION_DATA, desc="生成带框图像进度"):
         file_path = data["file_name"]
         rboxes = data["rboxes"]
 
-        # 获取原始图像尺寸，创建对应大小的黑色掩膜
-        img_width, img_height = get_image_size(file_path)
-        mask = np.zeros((img_height, img_width, 3), dtype=np.uint8)
+        # 读取原始图像
+        img = cv2.imread(file_path)
+        if img is None:
+            raise ValueError(f"无法读取图像：{file_path}，请检查文件路径是否正确")
 
         # 绘制当前图像的所有旋转矩形框
         for box in rboxes:
-            mask = draw_rotated_box(
-                mask,
+            img = draw_rotated_box(
+                img,
                 cx=box["cx"],
                 cy=box["cy"],
                 w=box["w"],
@@ -128,11 +129,11 @@ def batch_generate_masks():
 
         # 生成输出文件名并保存
         file_name = Path(file_path).name
-        output_path = os.path.join(OUTPUT_DIR, f"mask_{file_name}")
-        cv2.imwrite(output_path, mask)
+        output_path = os.path.join(OUTPUT_DIR, f"boxed_{file_name}")
+        cv2.imwrite(output_path, img)
 
-    print(f"\n所有掩膜图已保存至：{os.path.abspath(OUTPUT_DIR)}")
-    print("提示：掩膜图为黑色背景+白色旋转矩形框，尺寸与原始图像完全一致")
+    print(f"\n所有带框图像已保存至：{os.path.abspath(OUTPUT_DIR)}")
+    print("提示：图像为原图背景+旋转矩形框，尺寸与原始图像完全一致")
 
 
 if __name__ == "__main__":

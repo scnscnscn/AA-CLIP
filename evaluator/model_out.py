@@ -1,12 +1,17 @@
 import os
 import json
 import argparse
+import time
 import numpy as np
 from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import cv2
+
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from utils import setup_seed
 from model.adapter import AdaptedCLIP
@@ -135,7 +140,9 @@ def generate_rbox_results(
     scale_y = target_height / img_size
     results = []
     for score_map, file_name in zip(preds, file_names):
+        start = time.perf_counter()
         rboxes = _extract_rboxes(score_map, threshold, min_area)
+        elapsed = time.perf_counter() - start
         # 缩放坐标到目标尺寸
         scaled_rboxes = []
         for rbox in rboxes:
@@ -153,6 +160,7 @@ def generate_rbox_results(
                 "class_name": class_name,
                 "defect_count": len(scaled_rboxes),
                 "rboxes": scaled_rboxes,
+                "inference_time_sec": elapsed,
             }
         )
     return results
@@ -284,6 +292,13 @@ def main():
         )
         all_rbox_results.extend(class_rbox_results)
 
+        # 打印该类别的每张图像处理结果
+        for res in class_rbox_results:
+            print(
+                f"Processed {os.path.basename(res['file_name'])}: {res['defect_count']} defects, "
+                f"time: {res['inference_time_sec']:.6f}s"
+            )
+
         # 输出该类别的统计信息
         total_defects = sum([res["defect_count"] for res in class_rbox_results])
         print(
@@ -294,9 +309,15 @@ def main():
     with open(args.rbox_output, "w", encoding="utf-8") as f:
         json.dump(all_rbox_results, f, ensure_ascii=False, indent=2)
 
+    # 计算总处理时间
+    total_time = sum([res["inference_time_sec"] for res in all_rbox_results])
+    avg_time = total_time / len(all_rbox_results) if all_rbox_results else 0
+
     print(f"\nRBox结果已保存到: {args.rbox_output}")
     print(f"总测试样本数: {len(all_rbox_results)}")
     print(f"总检测缺陷数: {sum([res['defect_count'] for res in all_rbox_results])}")
+    print(f"总处理时间: {total_time:.6f}s")
+    print(f"平均每张图像处理时间: {avg_time:.6f}s")
 
 
 if __name__ == "__main__":

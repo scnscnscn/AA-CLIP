@@ -1,13 +1,9 @@
 import argparse
 import json
-import time
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
-try:
-    import cv2  # type: ignore
-except ImportError as exc:  # pragma: no cover
-    raise ImportError("OpenCV (cv2) is required to run this script") from exc
+import cv2
 import numpy as np
 
 
@@ -150,9 +146,7 @@ def serialize_boxes(boxes: Sequence[Box]) -> List[Dict[str, float]]:
 def process_single_image(input_path: Path, args) -> Dict[str, object]:
     """处理单张图像，提取旋转框并返回结果字典"""
     mask = load_mask(input_path, args.threshold)
-    start = time.perf_counter()
     boxes = extract_rboxes(mask, args.min_area)
-    elapsed = time.perf_counter() - start
 
     # 构造结果字典：file_name改为完整路径（绝对路径）
     result = {
@@ -160,7 +154,6 @@ def process_single_image(input_path: Path, args) -> Dict[str, object]:
         "class_name": args.class_name,
         "defect_count": len(boxes),
         "rboxes": serialize_boxes(boxes),
-        "inference_time_sec": elapsed,
     }
 
     return result
@@ -231,7 +224,6 @@ def main() -> None:
 
     # 批量处理图像
     all_results = []
-    total_time = 0.0
     total_defects = 0
 
     for img_path in image_paths:
@@ -239,14 +231,10 @@ def main() -> None:
         all_results.append(result)
 
         # 累计统计信息
-        total_time += result["inference_time_sec"]
         total_defects += result["defect_count"]
 
         # 打印单张图像处理结果
-        print(
-            f"Processed {img_path.name}: {result['defect_count']} defects, "
-            f"time: {result['inference_time_sec']:.6f}s"
-        )
+        print(f"Processed {img_path.name}: {result['defect_count']} defects")
 
     # 保存所有结果到JSON文件
     with Path(args.save_json).open("w", encoding="utf-8") as handle:
@@ -256,7 +244,6 @@ def main() -> None:
     print(f"\nSummary:")
     print(f"Total images processed: {len(image_paths)}")
     print(f"Total defects detected: {total_defects}")
-    print(f"Average processing time per image: {total_time / len(image_paths):.6f}s")
     print(f"Results saved to: {args.save_json}")
 
     # 如果提供了真实标签路径，执行评估
